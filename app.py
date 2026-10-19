@@ -65,5 +65,5 @@ def audit_sales_directory(target_folder: str):
 
 if __name__ == "__main__":
     # Allows folder name to be passed as a CLI argument: python app.py ./reports
-    target_dir = sys.argv[1] if len(sys.argv) > 1 else "C:/Users/supre/OneDrive/Desktop/Dataset"
+    target_dir = sys.argv[1] if len(sys.argv) > 1 else "C:/Users/Supreeth/OneDrive - Aritha Consulting Services/Desktop/Dataset"
     audit_sales_directory(target_dir)
