@@ -101,8 +101,16 @@ class ReportAuditor:
                 continue
 
             # Populate computed values into the sheet
-            self.sheet.cell(row=row_idx, column=total_amt_col, value=total_amount)
-            self.sheet.cell(row=row_idx, column=disc_total_col, value=disc_total)
+            # self.sheet.cell(row=row_idx, column=total_amt_col, value=total_amount)
+            # self.sheet.cell(row=row_idx, column=disc_total_col, value=disc_total)
+
+
+            # Populate computed values into the sheet and apply currency formatting
+            cell_total = self.sheet.cell(row=row_idx, column=total_amt_col, value=total_amount)
+            cell_disc = self.sheet.cell(row=row_idx, column=disc_total_col, value=disc_total)
+
+            cell_total.number_format = '"$"#,##0.00'
+            cell_disc.number_format = '"$"#,##0.00'
 
             # Record valid transaction
             tx = Transaction(trans_id, prod_name, category, float(price), float(quantity), total_amount, disc_total)
