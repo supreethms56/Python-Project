@@ -112,6 +112,7 @@ class ReportAuditor:
             cell_total.number_format = '"$"#,##0.00'
             cell_disc.number_format = '"$"#,##0.00'
 
+
             # Record valid transaction
             tx = Transaction(trans_id, prod_name, category, float(price), float(quantity), total_amount, disc_total)
             self.valid_transactions.append(tx)
@@ -119,7 +120,7 @@ class ReportAuditor:
             self.product_units_sold[tx.product_name] += tx.quantity
 
         # AC-13: Generate Bar Chart in workbook
-        self._add_bar_chart(header_indices["Product_Name"], disc_total_col)
+        self._add_bar_chart()
 
         # AC-14: Save output file as audit_<original_filename>.xlsx
         output_filename = f"audit_{self.file_path.name}"
@@ -153,28 +154,60 @@ class ReportAuditor:
         header_indices[col_title] = new_col_idx
         return new_col_idx
 
-    def _add_bar_chart(self, prod_name_col: int, disc_total_col: int):
-        """Creates and embeds a Bar Chart plotting Product Name vs Discounted Total (AC-13)."""
-        if self.sheet.max_row <= 1 or not self.valid_transactions:
+    def _add_bar_chart(self):
+        """
+        Aggregates discounted totals by category, writes a summary table,
+        and creates a Bar Chart of Category vs. Grouped Discounted Total.
+        """
+        if not self.valid_transactions:
             return
 
+        # 1. Aggregate discounted totals by category
+        category_totals = defaultdict(float)
+        for tx in self.valid_transactions:
+            category_totals[tx.category] += tx.discounted_total
+
+        if not category_totals:
+            return
+
+        # 2. Position the summary table 2 columns to the right of raw data
+        start_col = self.sheet.max_column + 2
+        summary_cat_col = start_col
+        summary_val_col = start_col + 1
+
+        # Write summary table headers
+        self.sheet.cell(row=1, column=summary_cat_col, value="Category")
+        self.sheet.cell(row=1, column=summary_val_col, value="Total Discounted Price")
+
+        # Write aggregated rows and format as currency
+        current_row = 2
+        for cat, total in category_totals.items():
+            self.sheet.cell(row=current_row, column=summary_cat_col, value=cat)
+            val_cell = self.sheet.cell(row=current_row, column=summary_val_col, value=round(total, 2))
+            val_cell.number_format = '"$"#,##0.00'
+            current_row += 1
+
+        summary_max_row = current_row - 1
+
+        # 3. Create the bar chart
         chart = BarChart()
         chart.type = "col"
         chart.style = 10
-        chart.title = "Product Name vs. Discounted Total"
-        chart.y_axis.title = "Discounted Total ($)"
-        chart.x_axis.title = "Product Name"
+        chart.title = "Category vs. Discounted Total"
+        chart.y_axis.title = "Total Discounted Price ($)"
+        chart.x_axis.title = "Category"
 
-        # Reference data and category headers
-        data = Reference(self.sheet, min_col=disc_total_col, min_row=1, max_row=self.sheet.max_row)
-        categories = Reference(self.sheet, min_col=prod_name_col, min_row=2, max_row=self.sheet.max_row)
+        # Reference data and category headers from the summary table
+        data = Reference(self.sheet, min_col=summary_val_col, min_row=1, max_row=summary_max_row)
+        categories = Reference(self.sheet, min_col=summary_cat_col, min_row=2, max_row=summary_max_row)
 
         chart.add_data(data, titles_from_data=True)
         chart.set_categories(categories)
         chart.legend = None
 
-        # Position chart next to data table
-        target_cell = f"{get_column_letter(self.sheet.max_column + 2)}2"
+        # 4. Position chart next to the summary table
+        chart_col_letter = get_column_letter(summary_val_col + 2)
+        target_cell = f"{chart_col_letter}2"
         self.sheet.add_chart(chart, target_cell)
 
     def _record_error(self, message: str):
