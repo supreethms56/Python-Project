@@ -15,6 +15,7 @@ Fulfills:
 
 from pathlib import Path
 from collections import defaultdict
+from typing import Any
 import openpyxl
 from openpyxl.chart import BarChart, Reference
 from openpyxl.utils import get_column_letter
