@@ -22,6 +22,10 @@ from openpyxl.utils import get_column_letter
 
 from utils import calculate_transaction_totals
 
+from openpyxl.chart import BarChart, Reference
+from openpyxl.chart.label import DataLabelList
+from openpyxl.utils import get_column_letter
+
 
 class Transaction:
     """AC-11: Encapsulates individual transaction row data."""
@@ -157,18 +161,19 @@ class ReportAuditor:
 
     def _add_bar_chart(self):
         """
-        Aggregates discounted totals by category, writes a summary table,
-        and creates a Bar Chart of Category vs. Grouped Discounted Total.
+        Creates a vertical bar chart where:
+        - Each category name appears as text directly below its bar (X-axis).
+        - The price/sales value is displayed directly on top of each bar.
         """
         if not self.valid_transactions:
             return
 
-        # 1. Aggregate discounted totals by category
-        category_totals = defaultdict(float)
+        # 1. Aggregate prices by Category
+        category_prices = defaultdict(float)
         for tx in self.valid_transactions:
-            category_totals[tx.category] += tx.discounted_total
+            category_prices[tx.category] += tx.price
 
-        if not category_totals:
+        if not category_prices:
             return
 
         # 2. Position the summary table 2 columns to the right of raw data
@@ -178,35 +183,51 @@ class ReportAuditor:
 
         # Write summary table headers
         self.sheet.cell(row=1, column=summary_cat_col, value="Category")
-        self.sheet.cell(row=1, column=summary_val_col, value="Total Discounted Price")
+        self.sheet.cell(row=1, column=summary_val_col, value="Price")
 
-        # Write aggregated rows and format as currency
+        # Write each category name as pure string text and price as numeric
         current_row = 2
-        for cat, total in category_totals.items():
-            self.sheet.cell(row=current_row, column=summary_cat_col, value=cat)
-            val_cell = self.sheet.cell(row=current_row, column=summary_val_col, value=round(total, 2))
+        for category_name, price in category_prices.items():
+            cat_cell = self.sheet.cell(row=current_row, column=summary_cat_col, value=str(category_name).strip())
+            cat_cell.data_type = "s"  # Force string type so Excel treats it as a category label
+            
+            val_cell = self.sheet.cell(row=current_row, column=summary_val_col, value=round(price, 2))
             val_cell.number_format = '"$"#,##0.00'
             current_row += 1
 
         summary_max_row = current_row - 1
 
-        # 3. Create the bar chart
+        # 3. Create the vertical bar chart
         chart = BarChart()
         chart.type = "col"
         chart.style = 10
-        chart.title = "Category vs. Discounted Total"
-        chart.y_axis.title = "Total Discounted Price ($)"
+        chart.title = "Category vs. Price"
+        chart.y_axis.title = "Price ($)"
         chart.x_axis.title = "Category"
+        chart.legend = None
 
-        # Reference data and category headers from the summary table
+        # 4. Bind numeric data (Price) and categories (Category names)
         data = Reference(self.sheet, min_col=summary_val_col, min_row=1, max_row=summary_max_row)
         categories = Reference(self.sheet, min_col=summary_cat_col, min_row=2, max_row=summary_max_row)
 
-        chart.add_data(data, titles_from_data=True)
+        chart.add_data(data, titles_from_data=True, from_rows=False)
         chart.set_categories(categories)
-        chart.legend = None
 
-        # 4. Position chart next to the summary table
+        # 5. Ensure X-axis and category text labels are visible
+        chart.x_axis.delete = False
+        chart.x_axis.tickLblPos = "low"
+        chart.x_axis.tickLblSkip = 1
+        chart.x_axis.tickMarkSkip = 1
+        chart.x_axis.number_format = "@"
+
+        # 6. Display the exact price on top of each bar
+        chart.dataLabels = DataLabelList()
+        chart.dataLabels.showVal = True
+        chart.dataLabels.showCatName = False
+        chart.dataLabels.showSerName = False
+        chart.dataLabels.showPercent = False
+
+        # 7. Position the chart on the sheet
         chart_col_letter = get_column_letter(summary_val_col + 2)
         target_cell = f"{chart_col_letter}2"
         self.sheet.add_chart(chart, target_cell)
